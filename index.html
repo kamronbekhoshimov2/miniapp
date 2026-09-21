@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Nomiyo Mini App</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Nomiyo</p>
+          <h1>Savol yuborish</h1>
+        </div>
+        <button class="icon-button" id="themeButton" type="button" aria-label="Rang rejimi">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </header>
+
+      <section class="hero-panel" aria-label="Tezkor holat">
+        <div class="hero-copy">
+          <span class="status-pill" id="telegramStatus">Telegram tekshirilmoqda</span>
+          <h2>Ustoz topish uchun savolingizni aniq yozing.</h2>
+        </div>
+        <div class="mini-visual" aria-hidden="true">
+          <div class="visual-board">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="visual-check">✓</div>
+        </div>
+      </section>
+
+      <form class="question-form" id="questionForm">
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Fan</h2>
+            <p>Qaysi yo'nalishdan yordam kerak?</p>
+          </div>
+          <div class="subject-grid" id="subjectGrid" role="radiogroup" aria-label="Fan tanlash">
+            <button type="button" class="subject-option is-active" data-subject="Matematika" role="radio" aria-checked="true">
+              <span class="subject-icon">∑</span>
+              <span>Matematika</span>
+            </button>
+            <button type="button" class="subject-option" data-subject="Fizika" role="radio" aria-checked="false">
+              <span class="subject-icon">λ</span>
+              <span>Fizika</span>
+            </button>
+            <button type="button" class="subject-option" data-subject="Informatika" role="radio" aria-checked="false">
+              <span class="subject-icon">{ }</span>
+              <span>Informatika</span>
+            </button>
+            <button type="button" class="subject-option" data-subject="Ingliz tili" role="radio" aria-checked="false">
+              <span class="subject-icon">Aa</span>
+              <span>Ingliz tili</span>
+            </button>
+            <button type="button" class="subject-option" data-subject="Ona tili" role="radio" aria-checked="false">
+              <span class="subject-icon">Ab</span>
+              <span>Ona tili</span>
+            </button>
+            <button type="button" class="subject-option" data-subject="Tarix" role="radio" aria-checked="false">
+              <span class="subject-icon">T</span>
+              <span>Tarix</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Savol</h2>
+            <p>Matnni qisqa, lekin tushunarli yozing.</p>
+          </div>
+          <label class="question-box">
+            <textarea id="questionText" name="question" rows="7" maxlength="1200" placeholder="Masalan: Kvadrat tenglama yechishda diskriminantni qanday topaman?"></textarea>
+            <span class="counter" id="counter">0/1200</span>
+          </label>
+        </section>
+
+        <section class="tools-row" aria-label="Tezkor amallar">
+          <button class="tool-button" type="button" data-template="Iltimos, masalani bosqichma-bosqich tushuntirib bering.">
+            Bosqichma-bosqich
+          </button>
+          <button class="tool-button" type="button" data-template="Javobni tekshirib, xatolarimni ko'rsating.">
+            Tekshirish
+          </button>
+          <button class="tool-button" type="button" data-template="Shu mavzuga o'xshash yana bitta misol bering.">
+            O'xshash misol
+          </button>
+        </section>
+
+        <button class="submit-button" id="submitButton" type="submit" disabled>
+          Ustozga yuborish
+        </button>
+      </form>
+
+      <section class="info-grid" aria-label="Foydalanuvchi ma'lumotlari">
+        <article class="info-card">
+          <span class="info-label">Foydalanuvchi</span>
+          <strong id="userName">Mehmon</strong>
+        </article>
+        <article class="info-card">
+          <span class="info-label">Holat</span>
+          <strong id="sendStatus">Tayyor</strong>
+        </article>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
