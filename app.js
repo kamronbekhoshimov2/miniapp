@@ -1,10 +1,6 @@
 (function () {
   const tg =
     window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  const STORAGE_KEYS = {
-    questions: "nomiyo_questions",
-    profile: "nomiyo_profile_name",
-  };
   const titles = {
     ask: "Savol yuborish",
     questions: "Mening savollarim",
@@ -12,12 +8,19 @@
     rating: "Reyting",
     profile: "Profil",
   };
+  const questionStatuses = {
+    new: "Ustoz qidirilmoqda",
+    accepted: "Faol suhbat",
+    closed: "Yechildi",
+    redirected: "Qayta yuborildi",
+  };
   const state = {
     subject: "Matematika",
     dark: false,
     view: "ask",
     userName: "Test foydalanuvchi",
     sending: false,
+    questions: [],
   };
   const elements = {
     form: document.getElementById("questionForm"),
@@ -41,19 +44,31 @@
   };
 
   function getQuestions() {
-    try {
-      return JSON.parse(
-        window.localStorage.getItem(STORAGE_KEYS.questions) || "[]",
-      );
-    } catch (_) {
-      return [];
-    }
+    return state.questions;
   }
   function saveQuestions(questions) {
-    window.localStorage.setItem(
-      STORAGE_KEYS.questions,
-      JSON.stringify(questions),
-    );
+    state.questions = questions;
+  }
+  async function apiRequest(path, options) {
+    if (!tg || !tg.initData) throw new Error("Telegram ma'lumoti topilmadi");
+    const response = await window.fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": tg.initData,
+        ...(options && options.headers),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Server xatosi");
+    return data;
+  }
+  async function refreshFromServer() {
+    const data = await apiRequest("/api/bootstrap");
+    state.userName = data.user.name;
+    saveQuestions(data.questions);
+    renderProfile();
+    renderQuestions();
   }
   function escapeHtml(value) {
     return String(value).replace(
@@ -117,11 +132,11 @@
           '<article class="question-item"><div class="item-meta"><span>' +
           escapeHtml(item.subject) +
           '</span><span class="item-status">' +
-          escapeHtml(item.status) +
+          escapeHtml(questionStatuses[item.status] || item.status) +
           "</span></div><p>" +
-          escapeHtml(item.question) +
+          escapeHtml(item.question_text) +
           "</p><time>" +
-          formatDate(item.sentAt) +
+          formatDate(item.created_at) +
           "</time></article>",
       )
       .join("");
@@ -140,7 +155,10 @@
       button.toggleAttribute("aria-current", active);
     });
     elements.pageTitle.textContent = titles[view];
-    if (view === "questions") renderQuestions();
+    if (view === "questions") {
+      renderQuestions();
+      if (tg && tg.initData) refreshFromServer().catch(() => {});
+    }
     if (view === "profile") renderProfile();
     updateSubmitState();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -170,7 +188,7 @@
     });
   }
 
-  function submitQuestion(event) {
+  async function submitQuestion(event) {
     if (event && event.preventDefault) event.preventDefault();
     const question = elements.questionText.value.trim();
     if (question.length < 5 || state.sending) {
@@ -178,53 +196,45 @@
         showToast("Savol kamida 5 ta belgidan iborat bo'lsin.");
       return;
     }
-    const payload = {
-      action: "submit_question",
-      subject: state.subject,
-      question_type: "text",
-      question_text: question,
-      sent_at: new Date().toISOString(),
-    };
-    const questions = getQuestions();
-    questions.unshift({
-      subject: payload.subject,
-      question: payload.question_text,
-      sentAt: payload.sent_at,
-      status: "Ustoz qidirilmoqda",
-    });
-    saveQuestions(questions.slice(0, 30));
     state.sending = true;
     elements.sendStatus.textContent = "Yuborilmoqda";
     updateSubmitState();
 
-    if (tg && typeof tg.sendData === "function") {
+    if (tg && tg.initData) {
       try {
-        tg.sendData(JSON.stringify(payload));
+        const data = await apiRequest("/api/questions", {
+          method: "POST",
+          body: JSON.stringify({
+            subject: state.subject,
+            question_text: question,
+          }),
+        });
+        saveQuestions([data.question, ...getQuestions()].slice(0, 30));
+        elements.questionText.value = "";
+        renderQuestions();
         elements.sendStatus.textContent = "Yuborildi";
-      } catch (_) {
+        showToast("Savol ustozlarga yuborildi.");
+      } catch (error) {
         state.sending = false;
         elements.sendStatus.textContent = "Xatolik";
         updateSubmitState();
-        showToast("Savol yuborilmadi. Qaytadan urinib ko'ring.");
+        showToast(error.message || "Savol yuborilmadi. Qaytadan urinib ko'ring.");
+        return;
       }
+      state.sending = false;
+      updateSubmitState();
       return;
     }
 
     state.sending = false;
-    elements.sendStatus.textContent = "Test rejimida saqlandi";
-    elements.questionText.value = "";
-    renderQuestions();
+    elements.sendStatus.textContent = "Telegram ichida oching";
     updateSubmitState();
-    showToast(
-      "Savol saqlandi. Telegram ichida ochilganda ustozlarga yuboriladi.",
-    );
+    showToast("Savol yuborish uchun Mini App'ni Telegram ichida oching.");
   }
 
-  function initTelegram() {
-    const savedName = window.localStorage.getItem(STORAGE_KEYS.profile);
+  async function initTelegram() {
     if (!tg) {
       elements.status.textContent = "Brauzerda test rejimi";
-      state.userName = savedName || state.userName;
       renderProfile();
       return;
     }
@@ -238,17 +248,22 @@
       ? [user.first_name, user.last_name].filter(Boolean).join(" ")
       : "";
     state.userName =
-      savedName ||
       telegramName ||
       (user && user.username ? "@" + user.username : "Telegram foydalanuvchi");
-    elements.status.textContent = "Telegram ulandi";
+    elements.status.textContent = "Server bilan ulanmoqda";
     if (tg.colorScheme === "dark") {
       state.dark = true;
       document.body.classList.add("dark");
     }
     if (tg.MainButton) tg.MainButton.onClick(submitQuestion);
     if (tg.BackButton) tg.BackButton.onClick(() => setView("ask"));
-    renderProfile();
+    try {
+      await refreshFromServer();
+      elements.status.textContent = "Telegram va server ulandi";
+    } catch (_) {
+      elements.status.textContent = "Serverga ulanib bo'lmadi";
+      showToast("Ma'lumotlarni yuklab bo'lmadi. Keyinroq qaytadan oching.");
+    }
   }
 
   elements.subjectGrid.addEventListener("click", (event) => {
@@ -276,16 +291,27 @@
     state.dark = !state.dark;
     document.body.classList.toggle("dark", state.dark);
   });
-  elements.saveProfileButton.addEventListener("click", () => {
+  elements.saveProfileButton.addEventListener("click", async () => {
     const name = elements.profileDisplayName.value.trim();
     if (!name) {
       showToast("Ismni kiriting.");
       return;
     }
-    state.userName = name;
-    window.localStorage.setItem(STORAGE_KEYS.profile, name);
-    renderProfile();
-    showToast("Profil saqlandi.");
+    if (!tg || !tg.initData) {
+      showToast("Profilni saqlash uchun Mini App'ni Telegram ichida oching.");
+      return;
+    }
+    try {
+      const data = await apiRequest("/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ name }),
+      });
+      state.userName = data.name;
+      renderProfile();
+      showToast("Profil saqlandi.");
+    } catch (error) {
+      showToast(error.message || "Profil saqlanmadi.");
+    }
   });
   elements.returnToBotButton.addEventListener("click", () => {
     if (tg && typeof tg.close === "function") {
@@ -295,7 +321,8 @@
     }
   });
 
-  initTelegram();
-  renderQuestions();
-  updateSubmitState();
+  initTelegram().finally(() => {
+    renderQuestions();
+    updateSubmitState();
+  });
 })();
