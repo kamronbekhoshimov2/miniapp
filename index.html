@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Nomiyo Mini App</title>
+    <title>Nomiyo</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
@@ -12,102 +12,72 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Nomiyo</p>
-          <h1>Savol yuborish</h1>
+          <h1 id="pageTitle">Savol yuborish</h1>
         </div>
-        <button class="icon-button" id="themeButton" type="button" aria-label="Rang rejimi">
-          <span aria-hidden="true">◐</span>
-        </button>
+        <button class="icon-button" id="themeButton" type="button" aria-label="Rang rejimini almashtirish" title="Rang rejimi">&#9788;</button>
       </header>
 
-      <section class="hero-panel" aria-label="Tezkor holat">
-        <div class="hero-copy">
-          <span class="status-pill" id="telegramStatus">Telegram tekshirilmoqda</span>
-          <h2>Ustoz topish uchun savolingizni aniq yozing.</h2>
-        </div>
-        <div class="mini-visual" aria-hidden="true">
-          <div class="visual-board">
-            <span></span>
-            <span></span>
-            <span></span>
+      <section class="view is-active" data-view="ask">
+        <section class="hero-panel" aria-label="Tezkor holat">
+          <div class="hero-copy">
+            <span class="status-pill" id="telegramStatus">Telegram tekshirilmoqda</span>
+            <h2>Savolingizga mos ustoz topamiz.</h2>
           </div>
-          <div class="visual-check">✓</div>
-        </div>
+          <div class="mini-visual" aria-hidden="true"><div class="visual-board"><span></span><span></span><span></span></div><div class="visual-check">OK</div></div>
+        </section>
+
+        <form class="question-form" id="questionForm">
+          <section class="section-block">
+            <div class="section-head"><h2>Fan</h2><p>Yordam kerak bo'lgan fanni tanlang.</p></div>
+            <div class="subject-grid" id="subjectGrid" role="radiogroup" aria-label="Fan tanlash">
+              <button type="button" class="subject-option is-active" data-subject="Matematika" role="radio" aria-checked="true"><span class="subject-icon">M</span><span>Matematika</span></button>
+              <button type="button" class="subject-option" data-subject="Fizika" role="radio" aria-checked="false"><span class="subject-icon">F</span><span>Fizika</span></button>
+              <button type="button" class="subject-option" data-subject="Informatika" role="radio" aria-checked="false"><span class="subject-icon">{ }</span><span>Informatika</span></button>
+              <button type="button" class="subject-option" data-subject="Ingliz tili" role="radio" aria-checked="false"><span class="subject-icon">EN</span><span>Ingliz tili</span></button>
+              <button type="button" class="subject-option" data-subject="Ona tili" role="radio" aria-checked="false"><span class="subject-icon">OT</span><span>Ona tili</span></button>
+              <button type="button" class="subject-option" data-subject="Tarix" role="radio" aria-checked="false"><span class="subject-icon">T</span><span>Tarix</span></button>
+            </div>
+          </section>
+
+          <section class="section-block">
+            <div class="section-head"><h2>Savol</h2><p>Qisqa va tushunarli yozing.</p></div>
+            <label class="question-box"><textarea id="questionText" name="question" rows="7" maxlength="1200" placeholder="Masalan: Kvadrat tenglama yechishda diskriminantni qanday topaman?"></textarea><span class="counter" id="counter">0/1200</span></label>
+          </section>
+
+          <section class="tools-row" aria-label="Savol qoliplari">
+            <button class="tool-button" type="button" data-template="Iltimos, masalani bosqichma-bosqich tushuntirib bering.">Bosqichma-bosqich</button>
+            <button class="tool-button" type="button" data-template="Javobni tekshirib, xatolarimni ko'rsating.">Tekshirish</button>
+            <button class="tool-button" type="button" data-template="Shu mavzuga o'xshash yana bitta misol bering.">O'xshash misol</button>
+          </section>
+          <button class="submit-button" id="submitButton" type="submit" disabled>Ustozga yuborish</button>
+        </form>
       </section>
 
-      <form class="question-form" id="questionForm">
-        <section class="section-block">
-          <div class="section-head">
-            <h2>Fan</h2>
-            <p>Qaysi yo'nalishdan yordam kerak?</p>
-          </div>
-          <div class="subject-grid" id="subjectGrid" role="radiogroup" aria-label="Fan tanlash">
-            <button type="button" class="subject-option is-active" data-subject="Matematika" role="radio" aria-checked="true">
-              <span class="subject-icon">∑</span>
-              <span>Matematika</span>
-            </button>
-            <button type="button" class="subject-option" data-subject="Fizika" role="radio" aria-checked="false">
-              <span class="subject-icon">λ</span>
-              <span>Fizika</span>
-            </button>
-            <button type="button" class="subject-option" data-subject="Informatika" role="radio" aria-checked="false">
-              <span class="subject-icon">{ }</span>
-              <span>Informatika</span>
-            </button>
-            <button type="button" class="subject-option" data-subject="Ingliz tili" role="radio" aria-checked="false">
-              <span class="subject-icon">Aa</span>
-              <span>Ingliz tili</span>
-            </button>
-            <button type="button" class="subject-option" data-subject="Ona tili" role="radio" aria-checked="false">
-              <span class="subject-icon">Ab</span>
-              <span>Ona tili</span>
-            </button>
-            <button type="button" class="subject-option" data-subject="Tarix" role="radio" aria-checked="false">
-              <span class="subject-icon">T</span>
-              <span>Tarix</span>
-            </button>
-          </div>
-        </section>
+      <section class="view" data-view="questions" hidden>
+        <section class="section-block list-section"><div class="section-head"><div><h2>Mening savollarim</h2><p id="questionSummary">Hali savol yuborilmagan.</p></div></div><div id="questionsList" class="item-list"></div></section>
+      </section>
 
-        <section class="section-block">
-          <div class="section-head">
-            <h2>Savol</h2>
-            <p>Matnni qisqa, lekin tushunarli yozing.</p>
-          </div>
-          <label class="question-box">
-            <textarea id="questionText" name="question" rows="7" maxlength="1200" placeholder="Masalan: Kvadrat tenglama yechishda diskriminantni qanday topaman?"></textarea>
-            <span class="counter" id="counter">0/1200</span>
-          </label>
-        </section>
+      <section class="view" data-view="chat" hidden>
+        <section class="section-block empty-state"><span class="empty-mark">U</span><h2>Ustoz bilan suhbat</h2><p>Ustoz savolingizni qabul qilganda Telegram bot sizga xabar beradi. Faol suhbat bot ichida davom etadi.</p><button class="submit-button compact" id="returnToBotButton" type="button">Telegramga qaytish</button></section>
+      </section>
 
-        <section class="tools-row" aria-label="Tezkor amallar">
-          <button class="tool-button" type="button" data-template="Iltimos, masalani bosqichma-bosqich tushuntirib bering.">
-            Bosqichma-bosqich
-          </button>
-          <button class="tool-button" type="button" data-template="Javobni tekshirib, xatolarimni ko'rsating.">
-            Tekshirish
-          </button>
-          <button class="tool-button" type="button" data-template="Shu mavzuga o'xshash yana bitta misol bering.">
-            O'xshash misol
-          </button>
-        </section>
+      <section class="view" data-view="rating" hidden>
+        <section class="section-block list-section"><div class="section-head"><div><h2>Ustozlar reytingi</h2><p>Baholar yakunlangan suhbatlardan yig'iladi.</p></div></div><div class="rating-note">Reyting va ustoz baholash Telegram botdagi suhbat yakunlangandan keyin yangilanadi.</div></section>
+      </section>
 
-        <button class="submit-button" id="submitButton" type="submit" disabled>
-          Ustozga yuborish
-        </button>
-      </form>
-
-      <section class="info-grid" aria-label="Foydalanuvchi ma'lumotlari">
-        <article class="info-card">
-          <span class="info-label">Foydalanuvchi</span>
-          <strong id="userName">Mehmon</strong>
-        </article>
-        <article class="info-card">
-          <span class="info-label">Holat</span>
-          <strong id="sendStatus">Tayyor</strong>
-        </article>
+      <section class="view" data-view="profile" hidden>
+        <section class="section-block profile-panel"><div class="avatar" id="profileInitials">TF</div><div><p class="eyebrow">O'quvchi profili</p><h2 id="profileName">Test foydalanuvchi</h2></div></section>
+        <section class="section-block profile-form"><label for="profileDisplayName">Ko'rinadigan ism</label><input id="profileDisplayName" type="text" maxlength="60" placeholder="Ismingiz" /><button class="submit-button compact" id="saveProfileButton" type="button">Saqlash</button></section>
+        <section class="info-grid" aria-label="Profil statistikasi"><article class="info-card"><span class="info-label">Savollar</span><strong id="profileQuestionCount">0</strong></article><article class="info-card"><span class="info-label">Holat</span><strong id="sendStatus">Tayyor</strong></article></section>
       </section>
     </main>
-
+    <nav class="bottom-nav" aria-label="Asosiy bo'limlar">
+      <button class="nav-item is-active" type="button" data-nav="ask" aria-current="page"><span>Savol</span></button>
+      <button class="nav-item" type="button" data-nav="questions"><span>Savollarim</span></button>
+      <button class="nav-item" type="button" data-nav="chat"><span>Suhbat</span></button>
+      <button class="nav-item" type="button" data-nav="rating"><span>Reyting</span></button>
+      <button class="nav-item" type="button" data-nav="profile"><span>Profil</span></button>
+    </nav>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
   </body>
