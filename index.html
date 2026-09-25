@@ -51,6 +51,10 @@
           </section>
           <button class="submit-button" id="submitButton" type="submit" disabled>Ustozga yuborish</button>
         </form>
+        <section class="teacher-workspace" id="teacherWorkspace" hidden>
+          <section class="section-block"><p class="eyebrow">Ustoz kabineti</p><h2 id="teacherSubject">Fan tanlanmagan</h2><p class="teacher-status" id="teacherStatus">Holat yuklanmoqda</p><button class="submit-button compact" id="teacherAvailabilityButton" type="button">Holatni o'zgartirish</button></section>
+          <section class="info-grid" aria-label="Ustoz statistikasi"><article class="info-card"><span class="info-label">Reyting</span><strong id="teacherRating">-</strong></article><article class="info-card"><span class="info-label">Yordamlar</span><strong id="teacherHelpedCount">0</strong></article></section>
+        </section>
       </section>
 
       <section class="view" data-view="questions" hidden>
@@ -66,9 +70,9 @@
       </section>
 
       <section class="view" data-view="profile" hidden>
-        <section class="section-block profile-panel"><div class="avatar" id="profileInitials">TF</div><div><p class="eyebrow">O'quvchi profili</p><h2 id="profileName">Test foydalanuvchi</h2></div></section>
+        <section class="section-block profile-panel"><div class="avatar" id="profileInitials">TF</div><div><p class="eyebrow" id="profileRole">Profil</p><h2 id="profileName">Test foydalanuvchi</h2></div></section>
         <section class="section-block profile-form"><label for="profileDisplayName">Ko'rinadigan ism</label><input id="profileDisplayName" type="text" maxlength="60" placeholder="Ismingiz" /><button class="submit-button compact" id="saveProfileButton" type="button">Saqlash</button></section>
-        <section class="info-grid" aria-label="Profil statistikasi"><article class="info-card"><span class="info-label">Savollar</span><strong id="profileQuestionCount">0</strong></article><article class="info-card"><span class="info-label">Holat</span><strong id="sendStatus">Tayyor</strong></article></section>
+        <section class="info-grid" aria-label="Profil statistikasi"><article class="info-card"><span class="info-label" id="profileCountLabel">Savollar</span><strong id="profileQuestionCount">0</strong></article><article class="info-card"><span class="info-label" id="profileStatusLabel">Holat</span><strong id="sendStatus">Tayyor</strong></article></section>
       </section>
     </main>
     <nav class="bottom-nav" aria-label="Asosiy bo'limlar">

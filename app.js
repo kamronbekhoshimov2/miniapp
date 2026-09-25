@@ -21,6 +21,8 @@
     userName: "Test foydalanuvchi",
     sending: false,
     questions: [],
+    role: "student",
+    teacher: null,
   };
   const elements = {
     form: document.getElementById("questionForm"),
@@ -41,6 +43,15 @@
     profileQuestionCount: document.getElementById("profileQuestionCount"),
     saveProfileButton: document.getElementById("saveProfileButton"),
     returnToBotButton: document.getElementById("returnToBotButton"),
+    teacherWorkspace: document.getElementById("teacherWorkspace"),
+    teacherSubject: document.getElementById("teacherSubject"),
+    teacherStatus: document.getElementById("teacherStatus"),
+    teacherAvailabilityButton: document.getElementById("teacherAvailabilityButton"),
+    teacherRating: document.getElementById("teacherRating"),
+    teacherHelpedCount: document.getElementById("teacherHelpedCount"),
+    profileRole: document.getElementById("profileRole"),
+    profileCountLabel: document.getElementById("profileCountLabel"),
+    profileStatusLabel: document.getElementById("profileStatusLabel"),
   };
 
   function getQuestions() {
@@ -51,22 +62,36 @@
   }
   async function apiRequest(path, options) {
     if (!tg || !tg.initData) throw new Error("Telegram ma'lumoti topilmadi");
-    const response = await window.fetch(path, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": tg.initData,
-        ...(options && options.headers),
-      },
-    });
+    let response;
+    try {
+      response = await window.fetch(path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Telegram-Init-Data": tg.initData,
+          ...(options && options.headers),
+        },
+      });
+    } catch (_) {
+      const error = new Error("Mini App serveriga ulanib bo'lmadi.");
+      error.canFallback = true;
+      throw error;
+    }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "Server xatosi");
+    if (!response.ok) {
+      const error = new Error(data.error || "Server xatosi");
+      error.canFallback = response.status === 404 || response.status >= 500;
+      throw error;
+    }
     return data;
   }
   async function refreshFromServer() {
     const data = await apiRequest("/api/bootstrap");
     state.userName = data.user.name;
+    state.role = data.user.role || "student";
+    state.teacher = data.teacher || null;
     saveQuestions(data.questions);
+    renderWorkspace();
     renderProfile();
     renderQuestions();
   }
@@ -109,10 +134,29 @@
 
   function renderProfile() {
     const questions = getQuestions();
+    const isTeacher = Boolean(state.teacher);
     elements.profileName.textContent = state.userName;
     elements.profileInitials.textContent = initials(state.userName);
     elements.profileDisplayName.value = state.userName;
-    elements.profileQuestionCount.textContent = String(questions.length);
+    elements.profileRole.textContent = isTeacher ? "O'qituvchi profili" : "O'quvchi profili";
+    elements.profileCountLabel.textContent = isTeacher ? "Yordamlar" : "Savollar";
+    elements.profileStatusLabel.textContent = isTeacher ? "Holat" : "Yuborish holati";
+    elements.profileQuestionCount.textContent = String(isTeacher ? state.teacher.helped_count : questions.length);
+    if (isTeacher) elements.sendStatus.textContent = state.teacher.is_free ? "Bo'sh" : "Band";
+  }
+
+  function renderWorkspace() {
+    const isTeacher = Boolean(state.teacher);
+    elements.form.hidden = isTeacher;
+    elements.teacherWorkspace.hidden = !isTeacher;
+    if (!isTeacher) return;
+    const teacher = state.teacher;
+    elements.pageTitle.textContent = "Ustoz kabineti";
+    elements.teacherSubject.textContent = teacher.subject || "Fan tanlanmagan";
+    elements.teacherStatus.textContent = teacher.is_free ? "Hozir bo'shsiz" : "Hozir bandsiz";
+    elements.teacherAvailabilityButton.textContent = teacher.is_free ? "Band holatga o'tish" : "Bo'sh holatga o'tish";
+    elements.teacherRating.textContent = teacher.rating === null ? "Hali baho yo'q" : teacher.rating.toFixed(1) + "/5";
+    elements.teacherHelpedCount.textContent = String(teacher.helped_count);
   }
 
   function renderQuestions() {
@@ -120,7 +164,7 @@
     elements.questionSummary.textContent = questions.length
       ? questions.length + " ta savol saqlandi."
       : "Hali savol yuborilmagan.";
-    elements.profileQuestionCount.textContent = String(questions.length);
+    if (!state.teacher) elements.profileQuestionCount.textContent = String(questions.length);
     if (!questions.length) {
       elements.questionsList.innerHTML =
         '<div class="empty-list">Savol yuborganingizdan keyin uning holati shu yerda chiqadi.</div>';
@@ -155,6 +199,7 @@
       button.toggleAttribute("aria-current", active);
     });
     elements.pageTitle.textContent = titles[view];
+    if (view === "ask" && state.teacher) renderWorkspace();
     if (view === "questions") {
       renderQuestions();
       if (tg && tg.initData) refreshFromServer().catch(() => {});
@@ -165,6 +210,10 @@
   }
 
   function updateSubmitState() {
+    if (state.teacher) {
+      if (tg && tg.MainButton) tg.MainButton.hide();
+      return;
+    }
     const hasQuestion = elements.questionText.value.trim().length >= 5;
     elements.submitButton.disabled = !hasQuestion || state.sending;
     elements.counter.textContent = elements.questionText.value.length + "/1200";
@@ -215,10 +264,26 @@
         elements.sendStatus.textContent = "Yuborildi";
         showToast("Savol ustozlarga yuborildi.");
       } catch (error) {
+        if (error.canFallback && tg && typeof tg.sendData === "function") {
+          tg.sendData(JSON.stringify({
+            action: "submit_question",
+            subject: state.subject,
+            question_type: "text",
+            question_text: question,
+          }));
+          state.sending = false;
+          elements.questionText.value = "";
+          updateSubmitState();
+          elements.sendStatus.textContent = "Botga yuborildi";
+          showToast("Savol bot orqali ustozlarga yuborildi.");
+          return;
+        }
         state.sending = false;
         elements.sendStatus.textContent = "Xatolik";
         updateSubmitState();
-        showToast(error.message || "Savol yuborilmadi. Qaytadan urinib ko'ring.");
+        showToast(
+          error.message || "Savol yuborilmadi. Qaytadan urinib ko'ring.",
+        );
         return;
       }
       state.sending = false;
@@ -311,6 +376,21 @@
       showToast("Profil saqlandi.");
     } catch (error) {
       showToast(error.message || "Profil saqlanmadi.");
+    }
+  });
+  elements.teacherAvailabilityButton.addEventListener("click", async () => {
+    if (!state.teacher) return;
+    try {
+      const data = await apiRequest("/api/teacher/availability", {
+        method: "POST",
+        body: JSON.stringify({ is_free: !state.teacher.is_free }),
+      });
+      state.teacher.is_free = data.is_free;
+      renderWorkspace();
+      renderProfile();
+      showToast(data.is_free ? "Bo'sh holatga o'tdingiz." : "Band holatga o'tdingiz.");
+    } catch (error) {
+      showToast(error.message || "Holat o'zgartirilmadi.");
     }
   });
   elements.returnToBotButton.addEventListener("click", () => {
