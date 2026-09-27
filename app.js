@@ -1,408 +1,395 @@
-(function () {
-  const tg =
-    window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  const titles = {
-    ask: "Savol yuborish",
-    questions: "Mening savollarim",
-    chat: "Ustoz bilan suhbat",
-    rating: "Reyting",
-    profile: "Profil",
-  };
-  const questionStatuses = {
-    new: "Ustoz qidirilmoqda",
-    accepted: "Faol suhbat",
-    closed: "Yechildi",
-    redirected: "Qayta yuborildi",
-  };
-  const state = {
-    subject: "Matematika",
-    dark: false,
-    view: "ask",
-    userName: "Test foydalanuvchi",
-    sending: false,
-    questions: [],
-    role: "student",
-    teacher: null,
-  };
-  const elements = {
-    form: document.getElementById("questionForm"),
-    subjectGrid: document.getElementById("subjectGrid"),
-    questionText: document.getElementById("questionText"),
-    counter: document.getElementById("counter"),
-    submitButton: document.getElementById("submitButton"),
-    status: document.getElementById("telegramStatus"),
-    sendStatus: document.getElementById("sendStatus"),
-    toast: document.getElementById("toast"),
-    themeButton: document.getElementById("themeButton"),
-    pageTitle: document.getElementById("pageTitle"),
-    questionsList: document.getElementById("questionsList"),
-    questionSummary: document.getElementById("questionSummary"),
-    profileName: document.getElementById("profileName"),
-    profileInitials: document.getElementById("profileInitials"),
-    profileDisplayName: document.getElementById("profileDisplayName"),
-    profileQuestionCount: document.getElementById("profileQuestionCount"),
-    saveProfileButton: document.getElementById("saveProfileButton"),
-    returnToBotButton: document.getElementById("returnToBotButton"),
-    teacherWorkspace: document.getElementById("teacherWorkspace"),
-    teacherSubject: document.getElementById("teacherSubject"),
-    teacherStatus: document.getElementById("teacherStatus"),
-    teacherAvailabilityButton: document.getElementById("teacherAvailabilityButton"),
-    teacherRating: document.getElementById("teacherRating"),
-    teacherHelpedCount: document.getElementById("teacherHelpedCount"),
-    profileRole: document.getElementById("profileRole"),
-    profileCountLabel: document.getElementById("profileCountLabel"),
-    profileStatusLabel: document.getElementById("profileStatusLabel"),
-  };
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
 
-  function getQuestions() {
-    return state.questions;
-  }
-  function saveQuestions(questions) {
-    state.questions = questions;
-  }
-  async function apiRequest(path, options) {
-    if (!tg || !tg.initData) throw new Error("Telegram ma'lumoti topilmadi");
-    let response;
-    try {
-      response = await window.fetch(path, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          "X-Telegram-Init-Data": tg.initData,
-          ...(options && options.headers),
-        },
-      });
-    } catch (_) {
-      const error = new Error("Mini App serveriga ulanib bo'lmadi.");
-      error.canFallback = true;
-      throw error;
-    }
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || "Server xatosi");
-      error.canFallback = response.status === 404 || response.status >= 500;
-      throw error;
-    }
-    return data;
-  }
-  async function refreshFromServer() {
-    const data = await apiRequest("/api/bootstrap");
-    state.userName = data.user.name;
-    state.role = data.user.role || "student";
-    state.teacher = data.teacher || null;
-    saveQuestions(data.questions);
-    renderWorkspace();
-    renderProfile();
-    renderQuestions();
-  }
-  function escapeHtml(value) {
-    return String(value).replace(
-      /[&<>\"]/g,
-      (char) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char],
-    );
-  }
-  function formatDate(value) {
-    return new Intl.DateTimeFormat("uz-UZ", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
-  }
-  function initials(name) {
-    return (
-      name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase() || "N"
-    );
-  }
+const SUBJECTS = {
+  "🧮 Matematika": "Matematika",
+  "⚛️ Fizika": "Fizika",
+  "💻 Informatika": "Informatika",
+  "🇬🇧 Ingliz tili": "Ingliz tili",
+  "✍️ Ona tili": "Ona tili",
+  "🏛️ Tarix": "Tarix",
+  "📌 Boshqa fan": "Boshqa fan",
+};
 
-  function showToast(message) {
-    elements.toast.textContent = message;
-    elements.toast.classList.add("is-visible");
-    window.clearTimeout(showToast.timer);
-    showToast.timer = window.setTimeout(
-      () => elements.toast.classList.remove("is-visible"),
-      2600,
-    );
-  }
+let state = {
+  snapshot: null,
+  tab: "savol",
+  selectedSubject: null,
+  chatMessages: [],
+  lastMsgId: 0,
+};
+let chatPollTimer = null;
+let bootstrapPollTimer = null;
 
-  function renderProfile() {
-    const questions = getQuestions();
-    const isTeacher = Boolean(state.teacher);
-    elements.profileName.textContent = state.userName;
-    elements.profileInitials.textContent = initials(state.userName);
-    elements.profileDisplayName.value = state.userName;
-    elements.profileRole.textContent = isTeacher ? "O'qituvchi profili" : "O'quvchi profili";
-    elements.profileCountLabel.textContent = isTeacher ? "Yordamlar" : "Savollar";
-    elements.profileStatusLabel.textContent = isTeacher ? "Holat" : "Yuborish holati";
-    elements.profileQuestionCount.textContent = String(isTeacher ? state.teacher.helped_count : questions.length);
-    if (isTeacher) elements.sendStatus.textContent = state.teacher.is_free ? "Bo'sh" : "Band";
-  }
+function initData() {
+  return (tg && tg.initData) || "";
+}
 
-  function renderWorkspace() {
-    const isTeacher = Boolean(state.teacher);
-    elements.form.hidden = isTeacher;
-    elements.teacherWorkspace.hidden = !isTeacher;
-    if (!isTeacher) return;
-    const teacher = state.teacher;
-    elements.pageTitle.textContent = "Ustoz kabineti";
-    elements.teacherSubject.textContent = teacher.subject || "Fan tanlanmagan";
-    elements.teacherStatus.textContent = teacher.is_free ? "Hozir bo'shsiz" : "Hozir bandsiz";
-    elements.teacherAvailabilityButton.textContent = teacher.is_free ? "Band holatga o'tish" : "Bo'sh holatga o'tish";
-    elements.teacherRating.textContent = teacher.rating === null ? "Hali baho yo'q" : teacher.rating.toFixed(1) + "/5";
-    elements.teacherHelpedCount.textContent = String(teacher.helped_count);
-  }
-
-  function renderQuestions() {
-    const questions = getQuestions();
-    elements.questionSummary.textContent = questions.length
-      ? questions.length + " ta savol saqlandi."
-      : "Hali savol yuborilmagan.";
-    if (!state.teacher) elements.profileQuestionCount.textContent = String(questions.length);
-    if (!questions.length) {
-      elements.questionsList.innerHTML =
-        '<div class="empty-list">Savol yuborganingizdan keyin uning holati shu yerda chiqadi.</div>';
-      return;
-    }
-    elements.questionsList.innerHTML = questions
-      .map(
-        (item) =>
-          '<article class="question-item"><div class="item-meta"><span>' +
-          escapeHtml(item.subject) +
-          '</span><span class="item-status">' +
-          escapeHtml(questionStatuses[item.status] || item.status) +
-          "</span></div><p>" +
-          escapeHtml(item.question_text) +
-          "</p><time>" +
-          formatDate(item.created_at) +
-          "</time></article>",
-      )
-      .join("");
-  }
-
-  function setView(view) {
-    state.view = view;
-    document.querySelectorAll(".view").forEach((section) => {
-      const active = section.dataset.view === view;
-      section.hidden = !active;
-      section.classList.toggle("is-active", active);
-    });
-    document.querySelectorAll("[data-nav]").forEach((button) => {
-      const active = button.dataset.nav === view;
-      button.classList.toggle("is-active", active);
-      button.toggleAttribute("aria-current", active);
-    });
-    elements.pageTitle.textContent = titles[view];
-    if (view === "ask" && state.teacher) renderWorkspace();
-    if (view === "questions") {
-      renderQuestions();
-      if (tg && tg.initData) refreshFromServer().catch(() => {});
-    }
-    if (view === "profile") renderProfile();
-    updateSubmitState();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function updateSubmitState() {
-    if (state.teacher) {
-      if (tg && tg.MainButton) tg.MainButton.hide();
-      return;
-    }
-    const hasQuestion = elements.questionText.value.trim().length >= 5;
-    elements.submitButton.disabled = !hasQuestion || state.sending;
-    elements.counter.textContent = elements.questionText.value.length + "/1200";
-    if (tg && tg.MainButton) {
-      if (state.view === "ask" && hasQuestion && !state.sending) {
-        tg.MainButton.setText("Ustozga yuborish");
-        tg.MainButton.show();
-        tg.MainButton.enable();
-      } else {
-        tg.MainButton.hide();
-      }
-    }
-  }
-
-  function setSubject(button) {
-    state.subject = button.dataset.subject;
-    elements.subjectGrid.querySelectorAll(".subject-option").forEach((item) => {
-      const active = item === button;
-      item.classList.toggle("is-active", active);
-      item.setAttribute("aria-checked", String(active));
-    });
-  }
-
-  async function submitQuestion(event) {
-    if (event && event.preventDefault) event.preventDefault();
-    const question = elements.questionText.value.trim();
-    if (question.length < 5 || state.sending) {
-      if (question.length < 5)
-        showToast("Savol kamida 5 ta belgidan iborat bo'lsin.");
-      return;
-    }
-    state.sending = true;
-    elements.sendStatus.textContent = "Yuborilmoqda";
-    updateSubmitState();
-
-    if (tg && tg.initData) {
-      try {
-        const data = await apiRequest("/api/questions", {
-          method: "POST",
-          body: JSON.stringify({
-            subject: state.subject,
-            question_text: question,
-          }),
-        });
-        saveQuestions([data.question, ...getQuestions()].slice(0, 30));
-        elements.questionText.value = "";
-        renderQuestions();
-        elements.sendStatus.textContent = "Yuborildi";
-        showToast("Savol ustozlarga yuborildi.");
-      } catch (error) {
-        if (error.canFallback && tg && typeof tg.sendData === "function") {
-          tg.sendData(JSON.stringify({
-            action: "submit_question",
-            subject: state.subject,
-            question_type: "text",
-            question_text: question,
-          }));
-          state.sending = false;
-          elements.questionText.value = "";
-          updateSubmitState();
-          elements.sendStatus.textContent = "Botga yuborildi";
-          showToast("Savol bot orqali ustozlarga yuborildi.");
-          return;
-        }
-        state.sending = false;
-        elements.sendStatus.textContent = "Xatolik";
-        updateSubmitState();
-        showToast(
-          error.message || "Savol yuborilmadi. Qaytadan urinib ko'ring.",
-        );
-        return;
-      }
-      state.sending = false;
-      updateSubmitState();
-      return;
-    }
-
-    state.sending = false;
-    elements.sendStatus.textContent = "Telegram ichida oching";
-    updateSubmitState();
-    showToast("Savol yuborish uchun Mini App'ni Telegram ichida oching.");
-  }
-
-  async function initTelegram() {
-    if (!tg) {
-      elements.status.textContent = "Brauzerda test rejimi";
-      renderProfile();
-      return;
-    }
-    tg.ready();
-    tg.expand();
-    const user =
-      tg.initDataUnsafe && tg.initDataUnsafe.user
-        ? tg.initDataUnsafe.user
-        : null;
-    const telegramName = user
-      ? [user.first_name, user.last_name].filter(Boolean).join(" ")
-      : "";
-    state.userName =
-      telegramName ||
-      (user && user.username ? "@" + user.username : "Telegram foydalanuvchi");
-    elements.status.textContent = "Server bilan ulanmoqda";
-    if (tg.colorScheme === "dark") {
-      state.dark = true;
-      document.body.classList.add("dark");
-    }
-    if (tg.MainButton) tg.MainButton.onClick(submitQuestion);
-    if (tg.BackButton) tg.BackButton.onClick(() => setView("ask"));
-    try {
-      await refreshFromServer();
-      elements.status.textContent = "Telegram va server ulandi";
-    } catch (_) {
-      elements.status.textContent = "Serverga ulanib bo'lmadi";
-      showToast("Ma'lumotlarni yuklab bo'lmadi. Keyinroq qaytadan oching.");
-    }
-  }
-
-  elements.subjectGrid.addEventListener("click", (event) => {
-    const button = event.target.closest(".subject-option");
-    if (button) setSubject(button);
-  });
-  elements.questionText.addEventListener("input", updateSubmitState);
-  elements.form.addEventListener("submit", submitQuestion);
-  document.querySelectorAll("[data-template]").forEach((button) =>
-    button.addEventListener("click", () => {
-      const current = elements.questionText.value.trim();
-      elements.questionText.value = current
-        ? current + "\n\n" + button.dataset.template
-        : button.dataset.template;
-      elements.questionText.focus();
-      updateSubmitState();
-    }),
+async function api(path, options = {}) {
+  const headers = Object.assign(
+    { "Content-Type": "application/json", "X-Telegram-Init-Data": initData() },
+    options.headers || {},
   );
-  document
-    .querySelectorAll("[data-nav]")
-    .forEach((button) =>
-      button.addEventListener("click", () => setView(button.dataset.nav)),
+  let res;
+  try {
+    res = await fetch(path, Object.assign({}, options, { headers }));
+  } catch (e) {
+    throw new Error("Server bilan aloqa yo'q. Internetni tekshiring.");
+  }
+  let body = null;
+  try {
+    body = await res.json();
+  } catch (e) {
+    /* bo'sh javob */
+  }
+  if (!res.ok) {
+    const msg =
+      body && body.error ? body.error : `Server xatosi (${res.status})`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+function el(html) {
+  const d = document.createElement("div");
+  d.innerHTML = html.trim();
+  return d.firstElementChild;
+}
+
+async function loadBootstrap() {
+  if (!initData()) {
+    document.getElementById("content").innerHTML =
+      '<div class="card"><b>Xatolik.</b><div class="error">Bu sahifa faqat Telegram bot ichidan "Mini App" tugmasi orqali ochilganda ishlaydi.</div></div>';
+    return;
+  }
+  try {
+    state.snapshot = await api("/api/bootstrap");
+    render();
+  } catch (e) {
+    document.getElementById("content").innerHTML =
+      `<div class="card"><b>Yuklanmadi.</b><div class="error">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  render();
+}
+
+function render() {
+  const s = state.snapshot;
+  if (!s) return;
+  const isTeacher = !!s.teacher;
+  const tabsDef = isTeacher
+    ? [
+        ["holat", "Holat"],
+        ["chat", "Faol suhbat"],
+        ["profil", "Profil"],
+      ]
+    : [
+        ["savol", "Savol yuborish"],
+        ["savollarim", "Mening savollarim"],
+        ["chat", "Faol suhbat"],
+        ["profil", "Profil"],
+      ];
+
+  const tabsEl = document.getElementById("tabs");
+  tabsEl.innerHTML = "";
+  tabsDef.forEach(([key, label]) => {
+    const b = el(
+      `<button class="tab ${state.tab === key ? "active" : ""}">${label}</button>`,
     );
-  elements.themeButton.addEventListener("click", () => {
-    state.dark = !state.dark;
-    document.body.classList.toggle("dark", state.dark);
+    b.onclick = () => setTab(key);
+    tabsEl.appendChild(b);
   });
-  elements.saveProfileButton.addEventListener("click", async () => {
-    const name = elements.profileDisplayName.value.trim();
-    if (!name) {
-      showToast("Ismni kiriting.");
+  if (!tabsDef.find((t) => t[0] === state.tab)) state.tab = tabsDef[0][0];
+
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+  if (state.tab === "savol") content.appendChild(renderSendQuestion());
+  else if (state.tab === "savollarim") content.appendChild(renderMyQuestions());
+  else if (state.tab === "holat") content.appendChild(renderTeacherStatus());
+  else if (state.tab === "chat") content.appendChild(renderChat());
+  else if (state.tab === "profil") content.appendChild(renderProfile());
+
+  manageChatPolling();
+}
+
+function renderSendQuestion() {
+  const c = el(`
+    <div class="card">
+      <h2>Qaysi fandan savolingiz bor?</h2>
+      <div class="chip-row" id="subjectChips"></div>
+      <textarea id="qtext" rows="4" maxlength="1200" placeholder="Savolingizni yozing (kamida 5 belgi)..."></textarea>
+      <div class="hint" id="qcount">0/1200</div>
+      <button class="btn" id="sendBtn">Yuborish</button>
+      <div class="error" id="qerr" style="display:none"></div>
+    </div>
+  `);
+  const chips = c.querySelector("#subjectChips");
+  Object.entries(SUBJECTS).forEach(([label, value]) => {
+    const chip = el(`<button class="chip">${label}</button>`);
+    chip.onclick = () => {
+      state.selectedSubject = value;
+      chips
+        .querySelectorAll(".chip")
+        .forEach((x) => x.classList.remove("selected"));
+      chip.classList.add("selected");
+    };
+    chips.appendChild(chip);
+  });
+  const textarea = c.querySelector("#qtext");
+  const count = c.querySelector("#qcount");
+  textarea.oninput = () => {
+    count.textContent = `${textarea.value.length}/1200`;
+  };
+
+  c.querySelector("#sendBtn").onclick = async () => {
+    const err = c.querySelector("#qerr");
+    err.style.display = "none";
+    const text = textarea.value.trim();
+    if (!state.selectedSubject) {
+      err.textContent = "Fanni tanlang.";
+      err.style.display = "block";
       return;
     }
-    if (!tg || !tg.initData) {
-      showToast("Profilni saqlash uchun Mini App'ni Telegram ichida oching.");
+    if (text.length < 5) {
+      err.textContent = "Savol kamida 5 belgidan iborat bo'lishi kerak.";
+      err.style.display = "block";
       return;
     }
+    const btn = c.querySelector("#sendBtn");
+    btn.disabled = true;
+    btn.textContent = "Yuborilmoqda...";
     try {
-      const data = await apiRequest("/api/profile", {
+      await api("/api/questions", {
+        method: "POST",
+        body: JSON.stringify({
+          subject: state.selectedSubject,
+          question_text: text,
+        }),
+      });
+      textarea.value = "";
+      count.textContent = "0/1200";
+      if (tg)
+        tg.showAlert
+          ? tg.showAlert("Savolingiz yuborildi. Bo'sh ustozlarga xabar ketdi.")
+          : alert("Savolingiz yuborildi.");
+      await loadBootstrap();
+      setTab("savollarim");
+    } catch (e) {
+      err.textContent = e.message;
+      err.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Yuborish";
+    }
+  };
+  return c;
+}
+
+function renderMyQuestions() {
+  const qs = state.snapshot.questions || [];
+  if (!qs.length)
+    return el(
+      '<div class="card"><div class="empty">Hali savol yubormagansiz.</div></div>',
+    );
+  const statusLabel = {
+    new: "Kutilmoqda",
+    accepted: "Qabul qilindi",
+    closed: "Yakunlandi",
+  };
+  const items = qs
+    .map(
+      (q) => `
+    <div class="qitem">
+      <span class="qstatus">${statusLabel[q.status] || q.status}</span>
+      <b>${escapeHtml(q.subject)}</b>
+      <div>${escapeHtml(q.question_text || "")}</div>
+      <div class="hint">${escapeHtml(q.created_at || "")}</div>
+    </div>
+  `,
+    )
+    .join("");
+  return el(`<div class="card"><h2>Mening savollarim</h2>${items}</div>`);
+}
+
+function renderTeacherStatus() {
+  const t = state.snapshot.teacher;
+  const c = el(`
+    <div class="card">
+      <h2>Fan: ${escapeHtml(t.subject || "tanlanmagan")}</h2>
+      <div class="toggle-row">
+        <span>Bo'shman (yangi savollar kelsin)</span>
+        <button class="switch ${t.is_free ? "on" : ""}" id="freeSwitch"><span class="dot"></span></button>
+      </div>
+      <div class="hint" style="margin-top:10px">Reyting: ${t.rating ? t.rating.toFixed(1) + "/5" : "hali baho yo'q"} · Yordam berilgan: ${t.helped_count}</div>
+      <div class="error" id="terr" style="display:none"></div>
+    </div>
+  `);
+  c.querySelector("#freeSwitch").onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    const next = !btn.classList.contains("on");
+    btn.disabled = true;
+    try {
+      await api("/api/teacher/availability", {
+        method: "POST",
+        body: JSON.stringify({ is_free: next }),
+      });
+      await loadBootstrap();
+    } catch (e) {
+      const err = c.querySelector("#terr");
+      err.textContent = e.message;
+      err.style.display = "block";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  return c;
+}
+
+function renderChat() {
+  const chat = state.snapshot.active_chat;
+  if (!chat)
+    return el(
+      '<div class="card"><div class="empty">Hozircha faol suhbatingiz yo\'q.</div></div>',
+    );
+  const c = el(`
+    <div class="card">
+      <h2>${escapeHtml(chat.partner_name)} ${chat.subject ? "· " + escapeHtml(chat.subject) : ""}</h2>
+      <div class="msgs" id="msgs"></div>
+      <div class="row">
+        <input type="text" id="chatInput" placeholder="Xabar yozing...">
+        <button class="btn" id="chatSend" style="width:auto;padding:12px 16px;">Yubor</button>
+      </div>
+      <div class="error" id="cherr" style="display:none"></div>
+    </div>
+  `);
+  renderMessagesInto(c.querySelector("#msgs"));
+  const input = c.querySelector("#chatInput");
+  const send = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    try {
+      await api("/api/chat/send", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      state.chatMessages.push({
+        id: ++state.lastMsgId + 0.5,
+        sender_id: state.snapshot.user.id,
+        text,
+        created_at: "",
+      });
+      renderMessagesInto(document.getElementById("msgs"));
+      pollChat();
+    } catch (e) {
+      const err = c.querySelector("#cherr");
+      err.textContent = e.message;
+      err.style.display = "block";
+    }
+  };
+  c.querySelector("#chatSend").onclick = send;
+  input.onkeydown = (ev) => {
+    if (ev.key === "Enter") send();
+  };
+  return c;
+}
+
+function renderMessagesInto(container) {
+  if (!container) return;
+  const myId = state.snapshot.user.id;
+  container.innerHTML =
+    state.chatMessages
+      .map(
+        (m) => `
+    <div class="msg ${m.sender_id === myId ? "me" : ""}">
+      ${escapeHtml(m.text)}
+      <div class="t">${escapeHtml(m.created_at || "")}</div>
+    </div>
+  `,
+      )
+      .join("") || '<div class="empty">Xabarlar yo\'q</div>';
+  container.scrollTop = container.scrollHeight;
+}
+
+async function pollChat() {
+  if (!state.snapshot || !state.snapshot.active_chat) return;
+  try {
+    const res = await api(`/api/chat?after_id=${state.lastMsgId}`);
+    if (res.active && res.messages && res.messages.length) {
+      state.chatMessages.push(...res.messages);
+      state.lastMsgId = res.messages[res.messages.length - 1].id;
+      renderMessagesInto(document.getElementById("msgs"));
+    }
+  } catch (e) {
+    /* jim, keyingi urinishda qayta tekshiramiz */
+  }
+}
+
+function manageChatPolling() {
+  if (chatPollTimer) clearInterval(chatPollTimer);
+  if (state.tab === "chat" && state.snapshot.active_chat) {
+    chatPollTimer = setInterval(pollChat, 3000);
+  }
+}
+
+function renderProfile() {
+  const u = state.snapshot.user;
+  const c = el(`
+    <div class="card">
+      <h2>Profil</h2>
+      <input type="text" id="nameInput" value="${escapeHtml(u.name)}">
+      <button class="btn" id="saveName">Saqlash</button>
+      <div class="hint" id="perr"></div>
+    </div>
+  `);
+  c.querySelector("#saveName").onclick = async () => {
+    const name = c.querySelector("#nameInput").value.trim();
+    const hint = c.querySelector("#perr");
+    try {
+      await api("/api/profile", {
         method: "PUT",
         body: JSON.stringify({ name }),
       });
-      state.userName = data.name;
-      renderProfile();
-      showToast("Profil saqlandi.");
-    } catch (error) {
-      showToast(error.message || "Profil saqlanmadi.");
+      hint.textContent = "Saqlandi.";
+      await loadBootstrap();
+    } catch (e) {
+      hint.textContent = e.message;
     }
-  });
-  elements.teacherAvailabilityButton.addEventListener("click", async () => {
-    if (!state.teacher) return;
-    try {
-      const data = await apiRequest("/api/teacher/availability", {
-        method: "POST",
-        body: JSON.stringify({ is_free: !state.teacher.is_free }),
-      });
-      state.teacher.is_free = data.is_free;
-      renderWorkspace();
-      renderProfile();
-      showToast(data.is_free ? "Bo'sh holatga o'tdingiz." : "Band holatga o'tdingiz.");
-    } catch (error) {
-      showToast(error.message || "Holat o'zgartirilmadi.");
-    }
-  });
-  elements.returnToBotButton.addEventListener("click", () => {
-    if (tg && typeof tg.close === "function") {
-      tg.close();
-    } else {
-      showToast("Suhbat Telegram botda davom etadi.");
-    }
-  });
+  };
+  return c;
+}
 
-  initTelegram().finally(() => {
-    renderQuestions();
-    updateSubmitState();
-  });
-})();
+loadBootstrap();
+// Yangi savol qabul qilinishi / faol suhbat paydo bo'lishini kuzatib turamiz.
+bootstrapPollTimer = setInterval(async () => {
+  if (!initData()) return;
+  try {
+    const fresh = await api("/api/bootstrap");
+    const hadChat = !!(state.snapshot && state.snapshot.active_chat);
+    const hasChat = !!fresh.active_chat;
+    state.snapshot = fresh;
+    if (!hadChat && hasChat) {
+      state.chatMessages = [];
+      state.lastMsgId = 0;
+    }
+    render();
+  } catch (e) {
+    /* jim */
+  }
+}, 6000);
