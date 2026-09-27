@@ -1,8 +1,9 @@
+// Backend (bot + baza) qayerda ishlayotgan bo'lsa, shu domenni yozing.
+// Agar mini app'ni SHU BILAN BIR domenda joylasangiz, bo'sh qoldiring ("").
+const API_BASE = "https://kamronronbekdev.pythonanywhere.com";
+
 const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) {
-  tg.ready();
-  tg.expand();
-}
+if (tg) { tg.ready(); tg.expand(); }
 
 const SUBJECTS = {
   "🧮 Matematika": "Matematika",
@@ -14,13 +15,7 @@ const SUBJECTS = {
   "📌 Boshqa fan": "Boshqa fan",
 };
 
-let state = {
-  snapshot: null,
-  tab: "savol",
-  selectedSubject: null,
-  chatMessages: [],
-  lastMsgId: 0,
-};
+let state = { snapshot: null, tab: "savol", selectedSubject: null, chatMessages: [], lastMsgId: 0 };
 let chatPollTimer = null;
 let bootstrapPollTimer = null;
 
@@ -31,23 +26,18 @@ function initData() {
 async function api(path, options = {}) {
   const headers = Object.assign(
     { "Content-Type": "application/json", "X-Telegram-Init-Data": initData() },
-    options.headers || {},
+    options.headers || {}
   );
   let res;
   try {
-    res = await fetch(path, Object.assign({}, options, { headers }));
+    res = await fetch(API_BASE + path, Object.assign({}, options, { headers }));
   } catch (e) {
     throw new Error("Server bilan aloqa yo'q. Internetni tekshiring.");
   }
   let body = null;
-  try {
-    body = await res.json();
-  } catch (e) {
-    /* bo'sh javob */
-  }
+  try { body = await res.json(); } catch (e) { /* bo'sh javob */ }
   if (!res.ok) {
-    const msg =
-      body && body.error ? body.error : `Server xatosi (${res.status})`;
+    const msg = (body && body.error) ? body.error : `Server xatosi (${res.status})`;
     throw new Error(msg);
   }
   return body;
@@ -75,13 +65,7 @@ async function loadBootstrap() {
 }
 
 function escapeHtml(s) {
-  return String(s).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
 function setTab(tab) {
@@ -94,28 +78,17 @@ function render() {
   if (!s) return;
   const isTeacher = !!s.teacher;
   const tabsDef = isTeacher
-    ? [
-        ["holat", "Holat"],
-        ["chat", "Faol suhbat"],
-        ["profil", "Profil"],
-      ]
-    : [
-        ["savol", "Savol yuborish"],
-        ["savollarim", "Mening savollarim"],
-        ["chat", "Faol suhbat"],
-        ["profil", "Profil"],
-      ];
+    ? [["holat","Holat"],["chat","Faol suhbat"],["profil","Profil"]]
+    : [["savol","Savol yuborish"],["savollarim","Mening savollarim"],["chat","Faol suhbat"],["profil","Profil"]];
 
   const tabsEl = document.getElementById("tabs");
   tabsEl.innerHTML = "";
   tabsDef.forEach(([key, label]) => {
-    const b = el(
-      `<button class="tab ${state.tab === key ? "active" : ""}">${label}</button>`,
-    );
+    const b = el(`<button class="tab ${state.tab===key?'active':''}">${label}</button>`);
     b.onclick = () => setTab(key);
     tabsEl.appendChild(b);
   });
-  if (!tabsDef.find((t) => t[0] === state.tab)) state.tab = tabsDef[0][0];
+  if (!tabsDef.find(t => t[0] === state.tab)) state.tab = tabsDef[0][0];
 
   const content = document.getElementById("content");
   content.innerHTML = "";
@@ -144,58 +117,34 @@ function renderSendQuestion() {
     const chip = el(`<button class="chip">${label}</button>`);
     chip.onclick = () => {
       state.selectedSubject = value;
-      chips
-        .querySelectorAll(".chip")
-        .forEach((x) => x.classList.remove("selected"));
+      chips.querySelectorAll(".chip").forEach(x => x.classList.remove("selected"));
       chip.classList.add("selected");
     };
     chips.appendChild(chip);
   });
   const textarea = c.querySelector("#qtext");
   const count = c.querySelector("#qcount");
-  textarea.oninput = () => {
-    count.textContent = `${textarea.value.length}/1200`;
-  };
+  textarea.oninput = () => { count.textContent = `${textarea.value.length}/1200`; };
 
   c.querySelector("#sendBtn").onclick = async () => {
     const err = c.querySelector("#qerr");
     err.style.display = "none";
     const text = textarea.value.trim();
-    if (!state.selectedSubject) {
-      err.textContent = "Fanni tanlang.";
-      err.style.display = "block";
-      return;
-    }
-    if (text.length < 5) {
-      err.textContent = "Savol kamida 5 belgidan iborat bo'lishi kerak.";
-      err.style.display = "block";
-      return;
-    }
+    if (!state.selectedSubject) { err.textContent = "Fanni tanlang."; err.style.display = "block"; return; }
+    if (text.length < 5) { err.textContent = "Savol kamida 5 belgidan iborat bo'lishi kerak."; err.style.display = "block"; return; }
     const btn = c.querySelector("#sendBtn");
-    btn.disabled = true;
-    btn.textContent = "Yuborilmoqda...";
+    btn.disabled = true; btn.textContent = "Yuborilmoqda...";
     try {
-      await api("/api/questions", {
-        method: "POST",
-        body: JSON.stringify({
-          subject: state.selectedSubject,
-          question_text: text,
-        }),
-      });
-      textarea.value = "";
-      count.textContent = "0/1200";
-      if (tg)
-        tg.showAlert
-          ? tg.showAlert("Savolingiz yuborildi. Bo'sh ustozlarga xabar ketdi.")
-          : alert("Savolingiz yuborildi.");
+      await api("/api/questions", { method: "POST", body: JSON.stringify({ subject: state.selectedSubject, question_text: text }) });
+      textarea.value = ""; count.textContent = "0/1200";
+      if (tg) tg.showAlert ? tg.showAlert("Savolingiz yuborildi. Bo'sh ustozlarga xabar ketdi.") : alert("Savolingiz yuborildi.");
       await loadBootstrap();
       setTab("savollarim");
     } catch (e) {
       err.textContent = e.message;
       err.style.display = "block";
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Yuborish";
+      btn.disabled = false; btn.textContent = "Yuborish";
     }
   };
   return c;
@@ -203,27 +152,16 @@ function renderSendQuestion() {
 
 function renderMyQuestions() {
   const qs = state.snapshot.questions || [];
-  if (!qs.length)
-    return el(
-      '<div class="card"><div class="empty">Hali savol yubormagansiz.</div></div>',
-    );
-  const statusLabel = {
-    new: "Kutilmoqda",
-    accepted: "Qabul qilindi",
-    closed: "Yakunlandi",
-  };
-  const items = qs
-    .map(
-      (q) => `
+  if (!qs.length) return el('<div class="card"><div class="empty">Hali savol yubormagansiz.</div></div>');
+  const statusLabel = { new: "Kutilmoqda", accepted: "Qabul qilindi", closed: "Yakunlandi" };
+  const items = qs.map(q => `
     <div class="qitem">
       <span class="qstatus">${statusLabel[q.status] || q.status}</span>
       <b>${escapeHtml(q.subject)}</b>
       <div>${escapeHtml(q.question_text || "")}</div>
       <div class="hint">${escapeHtml(q.created_at || "")}</div>
     </div>
-  `,
-    )
-    .join("");
+  `).join("");
   return el(`<div class="card"><h2>Mening savollarim</h2>${items}</div>`);
 }
 
@@ -245,10 +183,7 @@ function renderTeacherStatus() {
     const next = !btn.classList.contains("on");
     btn.disabled = true;
     try {
-      await api("/api/teacher/availability", {
-        method: "POST",
-        body: JSON.stringify({ is_free: next }),
-      });
+      await api("/api/teacher/availability", { method: "POST", body: JSON.stringify({ is_free: next }) });
       await loadBootstrap();
     } catch (e) {
       const err = c.querySelector("#terr");
@@ -263,10 +198,7 @@ function renderTeacherStatus() {
 
 function renderChat() {
   const chat = state.snapshot.active_chat;
-  if (!chat)
-    return el(
-      '<div class="card"><div class="empty">Hozircha faol suhbatingiz yo\'q.</div></div>',
-    );
+  if (!chat) return el('<div class="card"><div class="empty">Hozircha faol suhbatingiz yo\'q.</div></div>');
   const c = el(`
     <div class="card">
       <h2>${escapeHtml(chat.partner_name)} ${chat.subject ? "· " + escapeHtml(chat.subject) : ""}</h2>
@@ -285,16 +217,8 @@ function renderChat() {
     if (!text) return;
     input.value = "";
     try {
-      await api("/api/chat/send", {
-        method: "POST",
-        body: JSON.stringify({ text }),
-      });
-      state.chatMessages.push({
-        id: ++state.lastMsgId + 0.5,
-        sender_id: state.snapshot.user.id,
-        text,
-        created_at: "",
-      });
+      await api("/api/chat/send", { method: "POST", body: JSON.stringify({ text }) });
+      state.chatMessages.push({ id: ++state.lastMsgId + 0.5, sender_id: state.snapshot.user.id, text, created_at: "" });
       renderMessagesInto(document.getElementById("msgs"));
       pollChat();
     } catch (e) {
@@ -304,26 +228,19 @@ function renderChat() {
     }
   };
   c.querySelector("#chatSend").onclick = send;
-  input.onkeydown = (ev) => {
-    if (ev.key === "Enter") send();
-  };
+  input.onkeydown = (ev) => { if (ev.key === "Enter") send(); };
   return c;
 }
 
 function renderMessagesInto(container) {
   if (!container) return;
   const myId = state.snapshot.user.id;
-  container.innerHTML =
-    state.chatMessages
-      .map(
-        (m) => `
+  container.innerHTML = state.chatMessages.map(m => `
     <div class="msg ${m.sender_id === myId ? "me" : ""}">
       ${escapeHtml(m.text)}
       <div class="t">${escapeHtml(m.created_at || "")}</div>
     </div>
-  `,
-      )
-      .join("") || '<div class="empty">Xabarlar yo\'q</div>';
+  `).join("") || '<div class="empty">Xabarlar yo\'q</div>';
   container.scrollTop = container.scrollHeight;
 }
 
@@ -336,9 +253,7 @@ async function pollChat() {
       state.lastMsgId = res.messages[res.messages.length - 1].id;
       renderMessagesInto(document.getElementById("msgs"));
     }
-  } catch (e) {
-    /* jim, keyingi urinishda qayta tekshiramiz */
-  }
+  } catch (e) { /* jim, keyingi urinishda qayta tekshiramiz */ }
 }
 
 function manageChatPolling() {
@@ -362,10 +277,7 @@ function renderProfile() {
     const name = c.querySelector("#nameInput").value.trim();
     const hint = c.querySelector("#perr");
     try {
-      await api("/api/profile", {
-        method: "PUT",
-        body: JSON.stringify({ name }),
-      });
+      await api("/api/profile", { method: "PUT", body: JSON.stringify({ name }) });
       hint.textContent = "Saqlandi.";
       await loadBootstrap();
     } catch (e) {
@@ -384,12 +296,7 @@ bootstrapPollTimer = setInterval(async () => {
     const hadChat = !!(state.snapshot && state.snapshot.active_chat);
     const hasChat = !!fresh.active_chat;
     state.snapshot = fresh;
-    if (!hadChat && hasChat) {
-      state.chatMessages = [];
-      state.lastMsgId = 0;
-    }
+    if (!hadChat && hasChat) { state.chatMessages = []; state.lastMsgId = 0; }
     render();
-  } catch (e) {
-    /* jim */
-  }
+  } catch (e) { /* jim */ }
 }, 6000);
