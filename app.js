@@ -15,7 +15,7 @@ const SUBJECTS = {
   "📌 Boshqa fan": "Boshqa fan",
 };
 
-let state = { snapshot: null, tab: "savol", selectedSubject: null, chatMessages: [], lastMsgId: 0 };
+let state = { snapshot: null, tab: "savol", selectedSubject: null, chatMessages: [], lastMsgId: 0, draft: "", chatDraft: "", pendingRender: false };
 let chatPollTimer = null;
 let bootstrapPollTimer = null;
 
@@ -114,7 +114,7 @@ function renderSendQuestion() {
   `);
   const chips = c.querySelector("#subjectChips");
   Object.entries(SUBJECTS).forEach(([label, value]) => {
-    const chip = el(`<button class="chip">${label}</button>`);
+    const chip = el(`<button class="chip ${state.selectedSubject === value ? "selected" : ""}">${label}</button>`);
     chip.onclick = () => {
       state.selectedSubject = value;
       chips.querySelectorAll(".chip").forEach(x => x.classList.remove("selected"));
@@ -124,7 +124,9 @@ function renderSendQuestion() {
   });
   const textarea = c.querySelector("#qtext");
   const count = c.querySelector("#qcount");
-  textarea.oninput = () => { count.textContent = `${textarea.value.length}/1200`; };
+  textarea.value = state.draft;
+  count.textContent = `${textarea.value.length}/1200`;
+  textarea.oninput = () => { state.draft = textarea.value; count.textContent = `${textarea.value.length}/1200`; };
 
   c.querySelector("#sendBtn").onclick = async () => {
     const err = c.querySelector("#qerr");
@@ -136,7 +138,7 @@ function renderSendQuestion() {
     btn.disabled = true; btn.textContent = "Yuborilmoqda...";
     try {
       await api("/api/questions", { method: "POST", body: JSON.stringify({ subject: state.selectedSubject, question_text: text }) });
-      textarea.value = ""; count.textContent = "0/1200";
+      state.draft = ""; textarea.value = ""; count.textContent = "0/1200";
       if (tg) tg.showAlert ? tg.showAlert("Savolingiz yuborildi. Bo'sh ustozlarga xabar ketdi.") : alert("Savolingiz yuborildi.");
       await loadBootstrap();
       setTab("savollarim");
@@ -212,10 +214,12 @@ function renderChat() {
   `);
   renderMessagesInto(c.querySelector("#msgs"));
   const input = c.querySelector("#chatInput");
+  input.value = state.chatDraft;
+  input.oninput = () => { state.chatDraft = input.value; };
   const send = async () => {
     const text = input.value.trim();
     if (!text) return;
-    input.value = "";
+    input.value = ""; state.chatDraft = "";
     try {
       await api("/api/chat/send", { method: "POST", body: JSON.stringify({ text }) });
       state.chatMessages.push({ id: ++state.lastMsgId + 0.5, sender_id: state.snapshot.user.id, text, created_at: "" });
@@ -289,14 +293,29 @@ function renderProfile() {
 
 loadBootstrap();
 // Yangi savol qabul qilinishi / faol suhbat paydo bo'lishini kuzatib turamiz.
+function isTyping() {
+  const a = document.activeElement;
+  return !!a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT");
+}
+
+// Yozayotgan maydondan chiqilganda, kutib turgan yangilanishni ko'rsatamiz.
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (state.pendingRender && !isTyping()) { state.pendingRender = false; render(); }
+  }, 100);
+});
+
 bootstrapPollTimer = setInterval(async () => {
   if (!initData()) return;
   try {
     const fresh = await api("/api/bootstrap");
+    const changed = JSON.stringify(fresh) !== JSON.stringify(state.snapshot);
+    if (!changed) return;                       // hech narsa o'zgarmadi — tegmaymiz
     const hadChat = !!(state.snapshot && state.snapshot.active_chat);
     const hasChat = !!fresh.active_chat;
     state.snapshot = fresh;
     if (!hadChat && hasChat) { state.chatMessages = []; state.lastMsgId = 0; }
+    if (isTyping()) { state.pendingRender = true; return; }  // yozayotganda bezovta qilmaymiz
     render();
   } catch (e) { /* jim */ }
 }, 6000);
