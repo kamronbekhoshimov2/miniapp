@@ -1,6 +1,6 @@
 // Backend (bot + baza) qayerda ishlayotgan bo'lsa, shu domenni yozing.
 // Agar mini app'ni SHU BILAN BIR domenda joylasangiz, bo'sh qoldiring ("").
-const API_BASE = "";
+const API_BASE = "https://miniapp-uyvazifa.vercel.app/";
 
 const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
